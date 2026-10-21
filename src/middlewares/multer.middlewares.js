@@ -1,4 +1,5 @@
 import multer from "multer"
+import path from "path"
 /*
 Multer is a Node.js middleware for Express.js used for handling multipart/form-data, which is primarily used for uploading files.
 Key Features of Multer
