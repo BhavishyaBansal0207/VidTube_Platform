@@ -5,6 +5,25 @@ import { User } from "../models/user.models.js";
 import { deleteFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 import console from "console";
 
+// whenever we want to add functionality this is our flow --> write controller, then go to routes and add route for this controller along with the middlewares and then go to app.js and import this route and pass the control to the controller 
+
+const generateAccessAndRefreshToken = async (userId) => {
+    try {
+        const user = await User.findById(userId)
+        if(!user){
+            throw new ApiError(400, "User does not exist");
+        }
+        const accessToken = user.generateAccessToken()
+        const refreshToken = user.generateRefreshToken()
+    
+        user.refreshToken = refreshToken
+        await user.save({validateBeforeSave : false});
+        return {accessToken, refreshToken}
+    } catch (error) {
+        throw new ApiError(500, `Something went wrong while generating access and refresh token : ${error}`)
+    }
+}
+
 const registerUser = asyncHandler(async (req, res) => {
     const {fullname, username, email, password} = req.body
 
@@ -29,7 +48,7 @@ const registerUser = asyncHandler(async (req, res) => {
     const avatarLocalPath = req.files?.avatar?.[0]?.path
     const coverLocalPath = req.files?.coverImage?.[0]?.path
 
-    console.log("Avatar local path : ",avatarLocalPath);
+    // console.log("Avatar local path : ",avatarLocalPath);
     
     if(!avatarLocalPath){
         throw new ApiError(409, "Avatar file is missing")
@@ -102,4 +121,72 @@ const registerUser = asyncHandler(async (req, res) => {
     }
 })
 
-export {registerUser}
+const loginUser = asyncHandler(async (req, res) => {
+  const { email, username, password } = req.body;
+
+  // validate user
+  if (!email || !password) {
+    throw new ApiError(500, "Email and password is required");
+  }
+
+  const user = User.findOne({
+    $or: [{ email }, { password }],
+  });
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  // check the password
+  const isPasswordValid = await user.isPasswordCorrect(password);
+
+  if (!isPasswordValid) {
+    throw new ApiError(401, "Invalid user credentials");
+  }
+
+  const { accessToken, refreshToken } =
+    await user.generateAccessAndRefreshToken(user._id);
+
+  // now we have two options either use the existed user object or use a new object after adding refresh token
+
+  /**
+   * this is how the user document looks when we have not added the refresh token
+    {
+        _id: ObjectId('6ad8fde1dbd2c911f0f0bae4'),
+        username: 'bb_18',
+        email: 'bhavishya@gmail.com',
+        avatar: 'https://res.cloudinary.com/os54pwgz/image/upload/v1792605658/hu0gihjn9gmtmsyvy4x4.png',
+        coverImage: 'https://res.cloudinary.com/os54pwgz/image/upload/v1792605665/b8bzjzrajwhu2frdzxnx.png',
+        watchHistory: [],
+        password: '888891',
+        createdAt: ISODate('2026-10-21T18:01:05.151Z'),
+        updatedAt: ISODate('2026-10-21T18:01:05.151Z'),
+        __v: NumberInt('0')
+    }
+     */
+
+  const loggedInUser = await User.findById(user._id).select("-password -refreshtoken")
+  if(!loggedInUser){
+    throw new ApiError(401, "User is not logged in ")
+  }
+
+  const options = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production" 
+  }
+
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(new ApiResponse(
+        200, 
+        { user : loggedInUser, accessToken, refreshToken },
+        "User logged in successfully"
+    ))
+}) 
+
+export {
+    registerUser,
+    loginUser,
+}

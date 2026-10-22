@@ -69,6 +69,8 @@ userSchema.pre("save", async function(next){
     if(!this.isModified("password")) return next()
     this.password = bcrypt.hash(this.password, 10)
     next
+
+    // there was a problem when we had writen next() as a function but we have to write just next and it was fixed while testing for register user controller
 })
 
 userSchema.methods.isPasswordCorrect = async function(password){
