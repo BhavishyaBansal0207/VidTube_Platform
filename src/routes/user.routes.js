@@ -30,7 +30,7 @@ router.route("/register").post(upload.fields(
 
 router.route("/login").post(loginUser)
 
-router.route("/getUser").get(getCurrentUser)
+router.route("/getUser").get(verifyJWT, getCurrentUser)
 
 router.route("/changePassword").post(verifyJWT, changeCurrentPassword)
 
