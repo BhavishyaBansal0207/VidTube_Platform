@@ -16,3 +16,5 @@ const subscriptionScehma = new Schema(
         timestamps: true
     }
 )
+
+export const Subscriber = mongoose.model("Subscriber", subscriptionScehma)
